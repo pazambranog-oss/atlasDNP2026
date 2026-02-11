@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import plotly.express as px
 
 
 st.set_page_config(
@@ -273,13 +274,13 @@ with tab3:
     # ======================================================
 
     st.subheader("2️⃣ Documento → Programa")
-
-    programa_sel = st.selectbox(
+    programa_sel_tab3 = st.selectbox(
         "Selecciona un programa",
-        programas
+        programas,
+        key="programa_tab3"
     )
 
-    df_prog = base1[base1[programa_sel] == "Sí"]
+    df_prog = base1[base1[programa_sel_tab3] == "Sí"]
 
     flujos_prog = (
         df_prog
@@ -288,7 +289,7 @@ with tab3:
         .reset_index(name="personas")
     )
 
-    labels = list(flujos_prog["tipo_documento"]) + [programa_sel]
+    labels = list(flujos_prog["tipo_documento"]) + [programa_sel_tab3]
     label_idx = {k: v for v, k in enumerate(labels)}
 
     sankey_prog = go.Figure(
@@ -297,7 +298,7 @@ with tab3:
                 node=dict(label=labels),
                 link=dict(
                     source=flujos_prog["tipo_documento"].map(label_idx),
-                    target=[label_idx[programa_sel]] * len(flujos_prog),
+                    target=[label_idx[programa_sel_tab3]] * len(flujos_prog),
                     value=flujos_prog["personas"]
                 )
             )
@@ -341,12 +342,11 @@ with tab3:
     doc_hist["afl_id"] = doc_hist["afl_id"].astype(str)
 
     df_sankey = (
-        base1[["Bdua_Afl_id", programa_sel]]
+        base1[["Bdua_Afl_id", programa_sel_tab3]]
         .merge(doc_hist, left_on="Bdua_Afl_id", right_on="afl_id", how="inner")
     )
 
-    df_sankey["acceso_programa"] = df_sankey[programa_sel].map({"Sí": "Accedió al programa", "No": "No accedió"})
-
+    df_sankey["acceso_programa"] = df_sankey[programa_sel_tab3].map({"Sí": "Accedió al programa", "No": "No accedió"})
     # --------------------------------------------------
     # 3. Agregación para Sankey
     # --------------------------------------------------
@@ -433,7 +433,7 @@ with tab3:
     )
 
 
-    programa_sel = st.selectbox(
+    programa_sel_tab3 = st.selectbox(
         "Programa",
         [
             "familias_en_accion",
@@ -447,7 +447,7 @@ with tab3:
         ]
     )
 
-    doc_prog["accedio_programa"] = doc_prog[programa_sel] == "Sí"
+    doc_prog["accedio_programa"] = doc_prog[programa_sel_tab3] == "Sí"
 
 
     resumen = (
@@ -502,11 +502,15 @@ with tab3:
     )])
 
     fig.update_layout(
-        title_text=f"Cambio documental y acceso a {programa_sel.replace('_', ' ').title()}",
+        title_text=f"Cambio documental y acceso a {programa_sel_tab3.replace('_', ' ').title()}",
         font_size=12
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+
+
+
 
 
 
@@ -545,23 +549,23 @@ with tab3:
         .merge(doc_fin, on="afl_id")
     )
 
-    df_sankey = df_sankey[df_sankey[programa_sel] == "Sí"]
+    df_sankey = df_sankey[df_sankey[programa_sel_tab3] == "Sí"]
 
     flujos1 = (
-        df_sankey.groupby(["doc_ini", programa_sel])
+        df_sankey.groupby(["doc_ini", programa_sel_tab3])
         .size()
         .reset_index(name="v")
     )
 
     flujos2 = (
-        df_sankey.groupby([programa_sel, "doc_fin"])
+        df_sankey.groupby([programa_sel_tab3, "doc_fin"])
         .size()
         .reset_index(name="v")
     )
 
     labels = (
         list(pd.unique(df_sankey["doc_ini"])) +
-        [programa_sel] +
+        [programa_sel_tab3] +
         list(pd.unique(df_sankey["doc_fin"]))
     )
     label_idx = {k: v for v, k in enumerate(labels)}
@@ -573,10 +577,10 @@ with tab3:
                 link=dict(
                     source=[
                         *flujos1["doc_ini"].map(label_idx),
-                        *([label_idx[programa_sel]] * len(flujos2))
+                        *([label_idx[programa_sel_tab3]] * len(flujos2))
                     ],
                     target=[
-                        *([label_idx[programa_sel]] * len(flujos1)),
+                        *([label_idx[programa_sel_tab3]] * len(flujos1)),
                         *flujos2["doc_fin"].map(label_idx)
                     ],
                     value=[*flujos1["v"], *flujos2["v"]]
@@ -586,6 +590,7 @@ with tab3:
     )
 
     st.plotly_chart(sankey_full, use_container_width=True)
+
 
 
 with tab4:
