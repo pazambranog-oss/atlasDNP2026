@@ -38,7 +38,8 @@ import geopandas as gpd
 @st.cache_data
 def load_municipios_df():
     gdf = gpd.read_file(
-        "/Users/paozambrano/Desktop/ProyectoAtlasDNP/Municipios/Municipios.shp"
+        #"/Users/paozambrano/Desktop/ProyectoAtlasDNP/Municipios/Municipios.shp"
+        "Municipios.shp"
     )
     gdf = gdf.to_crs(epsg=4326)
 
