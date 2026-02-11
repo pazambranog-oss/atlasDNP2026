@@ -13,7 +13,8 @@ st.set_page_config(
 # 📥 CARGA DE DATOS
 # =========================
 
-@st.cache_data
+
+@st.cache_data(show_spinner=False)
 def cargar_bases():
     ruta1 = "rsh_migrantes_limpio.parquet"
     ruta2 = "Evolucion_match.parquet"
