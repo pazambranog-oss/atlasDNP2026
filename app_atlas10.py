@@ -15,8 +15,8 @@ st.set_page_config(
 
 @st.cache_data
 def cargar_bases():
-    ruta1 = "/Users/paozambrano/Desktop/ProyectoAtlasDNP/rsh_migrantes_limpio.parquet"
-    ruta2 = "/Users/paozambrano/Desktop/ProyectoAtlasDNP/Evolucion_match.parquet"
+    ruta1 = "rsh_migrantes_limpio.parquet"
+    ruta2 = "Evolucion_match.parquet"
 
     base1 = pd.read_parquet(ruta1)
     base2 = pd.read_parquet(ruta2)
