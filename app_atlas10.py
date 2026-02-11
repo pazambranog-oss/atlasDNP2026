@@ -16,14 +16,11 @@ st.set_page_config(
 
 @st.cache_data(show_spinner=False)
 def cargar_bases():
-    #ruta1 = "rsh_migrantes_limpio.parquet"
+    ruta1 = "rsh_migrantes_limpio.parquet"
     ruta2 = "Evolucion_match.parquet"
 
-    #base1 = pd.read_parquet(ruta1)
-    base1 = pd.read_parquet("rsh_migrantes_limpio.parquet", columns=[
-    "Bdua_Afl_id", "edad", "Sexo", "tipo_documento",
-    # solo columnas necesarias
-])
+    base1 = pd.read_parquet(ruta1)
+
     base2 = pd.read_parquet(ruta2)
     return base1, base2
 
