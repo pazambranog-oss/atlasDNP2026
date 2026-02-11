@@ -33,28 +33,6 @@ base1, base2 = cargar_bases()
 
 st.success("Bases cargadas correctamente")
 
-import geopandas as gpd
-
-@st.cache_data
-def load_municipios_df():
-    gdf = gpd.read_file(
-        #"/Users/paozambrano/Desktop/ProyectoAtlasDNP/Municipios/Municipios.shp"
-        "Municipios.shp"
-    )
-    gdf = gdf.to_crs(epsg=4326)
-
-    gdf["Lat"] = gdf.geometry.centroid.y
-    gdf["Lon"] = gdf.geometry.centroid.x
-
-    return (
-        gdf[["MPIO_CCDGO", "MPIO_CNMBR", "Lat", "Lon"]]
-        .rename(columns={
-            "MPIO_CCDGO": "CODIGO_DANE",
-            "MPIO_CNMBR": "Municipio"
-        })
-    )
-
-municipios_df = load_municipios_df()
 
 # =========================
 # 🧹 LIMPIEZA BÁSICA
@@ -124,7 +102,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "👥 Caracterización y Programas",
     "🔄 Evolución Documental",
     "🧭 Sankeys de evolución documental",
-    "Mapa de acceso a programas"
+    "📊 Evolución documental y acceso a programas"
 ])
 
 # =========================================================
@@ -532,10 +510,6 @@ with tab3:
 
 
 
-
-
-
-
     # ======================================================
     # 🔄 SANKEY 3 — DOCUMENTO → PROGRAMA → DOCUMENTO
     # ======================================================
@@ -615,147 +589,163 @@ with tab3:
 
 
 with tab4:
-    import pydeck as pdk
-    import plotly.express as px
-    import numpy as np
+    st.title("Evolución documental y acceso a programas")
 
-    st.header("Mapa de acceso a programas (migrantes)")
-
-    # ============
-    # 1. FILTROS
-    # ============
-    col1, col2 = st.columns(2)
-
-    tipo_doc_f = col1.multiselect(
-        "Tipo de documento",
-        options=sorted(base1["tipo_documento"].dropna().unique()),
-        default=sorted(base1["tipo_documento"].dropna().unique()),
-        key="tab5_tipo_doc"
+    st.markdown(
+        """
+        Esta sección presenta patrones agregados de cambio documental 
+        y su relación con el acceso a programas sociales.
+        """
     )
 
-    programas_disponibles = [
-        "familias_en_accion",
-        "jovenes_en_accion",
-        "ingreso_solidario",
-        "devolucion_iva",
-        "colombia_mayor",
-        "transferencias_condicionadas",
-        "renta_ciudadana",
-        "renta_joven"
-    ]
+    # ======================================================
+    # 1️⃣ CAMBIO DE DOCUMENTO (BARRAS)
+    # ======================================================
 
-    programa_tab5 = col2.selectbox(
-        "Programa a visualizar",
-        options=programas_disponibles,
-        key="tab5_programa"
-    )
+    st.subheader("1️⃣ Personas que cambiaron tipo de documento")
 
-    # ============
-    # 2. FILTRO BASE
-    # ============
-    df_map = base1[
-        base1["tipo_documento"].isin(tipo_doc_f)
-    ].copy()
-
-    if df_map.empty:
-        st.warning("No hay datos con estos filtros.")
-        st.stop()
-
-    # ============
-    # 3. AGREGACIÓN POR MUNICIPIO
-    # ============
-    muni_counts = (
-        df_map.groupby("municipio").agg(
-            Conteo_total=("Bdua_Afl_id", "nunique"),
-            Programa_Si=(programa_tab5, lambda col: (col == "Sí").sum())
-        )
+    doc_hist = (
+        base2.sort_values(["afl_id", "HST_IDN_FECHA_INICIO"])
+        .groupby("afl_id")["TPS_IDN_ID"]
+        .agg(doc_inicial="first", doc_final="last")
         .reset_index()
     )
 
-    # ============
-    # 4. MERGE CON COORDENADAS
-    # ============
-
-    df_map_geo = municipios_df.merge(
-        muni_counts,
-        left_on="CODIGO_DANE",
-        right_on="Municipio",  # ⚠️ si muni_counts usa código, cámbialo
-        how="left"
+    doc_hist["cambio_doc"] = np.where(
+        doc_hist["doc_inicial"] != doc_hist["doc_final"],
+        "Cambió documento",
+        "No cambió documento"
     )
 
+    resumen_cambio = (
+        doc_hist["cambio_doc"]
+        .value_counts()
+        .reset_index()
+    )
+    resumen_cambio.columns = ["Condición", "Personas"]
 
-    df_map_geo["Lat"] = df_map_geo["Lat"].astype(float)
-    df_map_geo["Lon"] = df_map_geo["Lon"].astype(float)
-
-    # ============
-    # 5. RADIO DE BURBUJAS
-    # ============
-    df_map_geo["Programa_Si_adj"] = df_map_geo["Programa_Si"].replace(0, 0.5)
-    FACTOR = 1500
-    df_map_geo["radius"] = np.sqrt(df_map_geo["Programa_Si_adj"]) * FACTOR
-
-    # ============
-    # 6. COLORES
-    # ============
-    palette_programa = {
-        "familias_en_accion": (0, 123, 255),
-        "jovenes_en_accion": (255, 193, 7),
-        "ingreso_solidario": (40, 167, 69),
-        "devolucion_iva": (220, 53, 69),
-        "colombia_mayor": (108, 117, 125),
-        "transferencias_condicionadas": (23, 162, 184),
-        "renta_ciudadana": (102, 16, 242),
-        "renta_joven": (255, 102, 204)
-    }
-
-    base_r, base_g, base_b = palette_programa.get(programa_tab5, (180, 180, 180))
-
-    def compute_color(row):
-        if row["Programa_Si"] == 0:
-            return [170, 170, 170, 120]
-
-        intensidad = row["Programa_Si"] / row["Conteo_total"] if row["Conteo_total"] > 0 else 0
-        r = int(base_r * (0.5 + intensidad / 2))
-        g = int(base_g * (0.5 + intensidad / 2))
-        b = int(base_b * (0.5 + intensidad / 2))
-        return [r, g, b, 220]
-
-    df_map_geo["color"] = df_map_geo.apply(compute_color, axis=1)
-
-    # ============
-    # 7. MAPA PYDECK
-    # ============
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=df_map_geo,
-        get_position=["Lon", "Lat"],
-        get_radius="radius",
-        get_fill_color="color",
-        pickable=True
+    fig1 = px.bar(
+        resumen_cambio,
+        x="Personas",
+        y="Condición",
+        orientation="h",
+        text="Personas"
     )
 
-    view_state = pdk.ViewState(
-        latitude=4.6,
-        longitude=-74.1,
-        zoom=5
+    fig1.update_layout(height=400)
+    st.plotly_chart(fig1, width="stretch")
+
+    st.divider()
+
+    # ======================================================
+    # 2️⃣ DOCUMENTO INICIAL Y ACCESO A PROGRAMA
+    # ======================================================
+
+    st.subheader("2️⃣ Documento inicial y acceso a programa")
+
+    programa_sel = st.selectbox("Selecciona un programa", programas)
+
+    base1["Bdua_Afl_id"] = base1["Bdua_Afl_id"].astype(str)
+    doc_hist["afl_id"] = doc_hist["afl_id"].astype(str)
+
+    df_merge = base1.merge(
+        doc_hist,
+        left_on="Bdua_Afl_id",
+        right_on="afl_id",
+        how="inner"
     )
 
-    tooltip = {
-        "html": """
-        <b>{Municipio}</b><br/>
-        Total migrantes: {Conteo_total}<br/>
-        En programa: {Programa_Si}
-        """,
-        "style": {"color": "white"}
-    }
-
-    st.pydeck_chart(
-        pdk.Deck(
-            layers=[layer],
-            initial_view_state=view_state,
-            tooltip=tooltip
-        )
+    df_merge["Acceso"] = df_merge[programa_sel].map(
+        {"Sí": "Accedió", "No": "No accedió"}
     )
+
+    resumen_doc_prog = (
+        df_merge
+        .groupby(["doc_inicial", "Acceso"])
+        .size()
+        .reset_index(name="Personas")
+    )
+
+    fig2 = px.bar(
+        resumen_doc_prog,
+        x="doc_inicial",
+        y="Personas",
+        color="Acceso",
+        barmode="stack"
+    )
+
+    fig2.update_layout(
+        xaxis_title="Documento inicial",
+        yaxis_title="Número de personas",
+        height=500
+    )
+
+    st.plotly_chart(fig2, width="stretch")
+
+    st.divider()
+
+    # ======================================================
+    # 3️⃣ CAMBIO DOCUMENTAL Y PROBABILIDAD DE ACCESO
+    # ======================================================
+
+    st.subheader("3️⃣ Cambio documental y acceso al programa")
+
+    resumen_cambio_prog = (
+        df_merge
+        .groupby(["cambio_doc", "Acceso"])
+        .size()
+        .reset_index(name="Personas")
+    )
+
+    # Calcular porcentajes
+    resumen_cambio_prog["Total_grupo"] = (
+        resumen_cambio_prog
+        .groupby("cambio_doc")["Personas"]
+        .transform("sum")
+    )
+
+    resumen_cambio_prog["Porcentaje"] = (
+        resumen_cambio_prog["Personas"] /
+        resumen_cambio_prog["Total_grupo"] * 100
+    )
+
+    fig3 = px.bar(
+        resumen_cambio_prog,
+        x="cambio_doc",
+        y="Porcentaje",
+        color="Acceso",
+        barmode="stack",
+        text=round(resumen_cambio_prog["Porcentaje"], 1)
+    )
+
+    fig3.update_layout(
+        yaxis_title="Porcentaje dentro del grupo",
+        xaxis_title="Condición documental",
+        height=500
+    )
+
+    st.plotly_chart(fig3, width="stretch")
+
+    st.divider()
+
+    # ======================================================
+    # 4️⃣ TABLA RESUMEN PARA ANÁLISIS
+    # ======================================================
+
+    st.subheader("4️⃣ Tabla resumen")
+
+    tabla_final = (
+        resumen_cambio_prog[[
+            "cambio_doc",
+            "Acceso",
+            "Personas",
+            "Porcentaje"
+        ]]
+        .sort_values(["cambio_doc", "Acceso"])
+    )
+
+    st.dataframe(tabla_final, use_container_width=True)
+
 
 
 # =========================
